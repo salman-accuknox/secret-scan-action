@@ -3,6 +3,13 @@
 
 This GitHub Action scans your repository for secrets using TruffleHog and uploads the results to a specified artifact API.
 
+## New 
+Logic to dynamically determine the branch being scanned:
+
+### Direct Push: Scans the pushed branch (e.g., dev, prod, etc.).
+### Pull Requests: Scans only the PR source branch to check for secrets.
+The action is fully generic now and allows users to dynamically scan any branch without hardcoding dev as default.
+
 ## Inputs
 
 | Name                 | Description                                  | Required | Default  |
