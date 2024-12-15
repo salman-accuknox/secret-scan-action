@@ -79,8 +79,7 @@ runs:
 
     # Step 7: Fail Workflow If TruffleHog Finds Secrets
     - name: Fail on TruffleHog Findings
-      if: |
-        steps.trufflehog.outputs.result == 'failure' || $(jq -e '.verified | length > 0' trufflehog-results/trufflehog-results.json) == 0
+      if: steps.trufflehog.outcome == 'failure'
       run: |
         echo "TruffleHog detected critical findings. Failing the workflow."
         exit 1
