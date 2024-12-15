@@ -1,0 +1,76 @@
+name: "Secrets Scanner"
+description: "Scan Git repositories for secrets using TruffleHog and upload results to artifact API"
+author: "AccuKnox"
+
+inputs:
+  tenant_id:
+    description: "AccuKnox Tenant ID for artifact API."
+    required: true
+  artifact_api_token:
+    description: "Authorization token for the artifact API."
+    required: true
+  artifact_api_url:
+    description: "API URL to upload the TruffleHog results."
+    required: true
+  label_id:
+    description: "Label ID for categorizing the TruffleHog results."
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    # Step 1: Checkout Repository
+    - name: Checkout Repository
+      uses: actions/checkout@v3
+      with:
+        fetch-depth: 0  # Fetch full history
+
+    # Step 2: Fetch All Branches
+    - name: Fetch All Branches
+      run: git fetch --all
+      shell: bash
+
+    # Step 3: Determine Workflow Context (PR or Direct Commit)
+    - name: Determine Context
+      id: context
+      run: |
+        if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+          echo "PR detected"
+          echo "IS_PR=true" >> $GITHUB_ENV
+          echo "PR_BRANCH=${{ github.head_ref }}" >> $GITHUB_ENV
+        else
+          echo "Direct commit to dev detected"
+          echo "IS_PR=false" >> $GITHUB_ENV
+          echo "PR_BRANCH=dev" >> $GITHUB_ENV
+        fi
+      shell: bash
+
+    # Step 4: Install TruffleHog
+    - name: Install TruffleHog
+      run: |
+        curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh | sh -s -- -b /usr/local/bin
+        trufflehog --version
+      shell: bash
+
+    # Step 5: Run TruffleHog Scan
+    - name: Run TruffleHog Scan
+      env:
+          PR_BRANCH: ${{ env.PR_BRANCH }}
+      run: |
+        mkdir -p trufflehog-results
+        echo "Running TruffleHog scan on branch: ${{ env.PR_BRANCH }}"
+        trufflehog --no-update git file://./ \
+          --branch ${{ env.PR_BRANCH }} \
+          --results=verified,unverified,unknown \
+          --fail \
+          --json > trufflehog-results/trufflehog-results.json || true
+      shell: bash
+
+    # Step 6: Upload Results to Artifact Storage
+    - name: Upload to Artifact Storage
+      run: |
+        curl --location --request POST "${{ inputs.artifact_api_url }}?tenant_id=${{ inputs.tenant_id }}&data_type=TruffleHog&save_to_s3=false&label_id=${{ inputs.label_id }}" \
+          --header "Tenant-Id: ${{ inputs.tenant_id }}" \
+          --header "Authorization: Bearer ${{ inputs.artifact_api_token }}" \
+          --form "file=@trufflehog-results/trufflehog-results.json"
+      shell: bash
