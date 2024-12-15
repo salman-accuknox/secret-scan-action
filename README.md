@@ -14,7 +14,6 @@ The action is fully generic now and allows users to dynamically scan any branch 
 
 | Name                 | Description                                  | Required | Default  |
 |----------------------|----------------------------------------------|----------|----------|
-| `branch`             | Branch to scan.                              | No       | -        |
 | `tenant_id`          | AccuKnox Tenant ID.                          | Yes      | -        |
 | `artifact_api_token` | Authorization token for artifact API.        | Yes      | -        |
 | `artifact_api_url`   | URL of the artifact API to upload results.   | Yes      | -        |
@@ -34,15 +33,14 @@ on:
       - dev
 
 jobs:
-  trufflehog-scan:
+  secrets-scan:
     runs-on: ubuntu-latest
     steps:
-      - name: Run TruffleHog Action
-        uses: your-org/trufflehog-scan-action@v1
+      - name: Run Secrets Scanner
+        uses: accuknox/secrets-scanner@v1
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
           tenant_id: ${{ secrets.TENANT_ID }}
-          artifact_api_token: ${{ secrets.TOKEN }}
+          artifact_api_token: ${{ secrets.ARTIFACT_API_TOKEN }}
           artifact_api_url: "https://cspm.dev.accuknox.com/api/v1/artifact/"
           label_id: "custom-label-123"
 
