@@ -54,6 +54,8 @@ runs:
 
     # Step 5: Run TruffleHog Scan
     - name: Run TruffleHog Scan
+      id: trufflehog
+      continue-on-error: true  # Continue workflow even if TruffleHog fails
       env:
         SCAN_BRANCH: ${{ env.SCAN_BRANCH }}
       run: |
@@ -63,7 +65,7 @@ runs:
           --branch $SCAN_BRANCH \
           --results=verified,unverified,unknown \
           --fail \
-          --json > trufflehog-results/trufflehog-results.json || true
+          --json > trufflehog-results/trufflehog-results.json
       shell: bash
 
     # Step 6: Upload Results to Artifact Storage
@@ -73,4 +75,13 @@ runs:
           --header "Tenant-Id: ${{ inputs.tenant_id }}" \
           --header "Authorization: Bearer ${{ inputs.artifact_api_token }}" \
           --form "file=@trufflehog-results/trufflehog-results.json"
+      shell: bash
+
+    # Step 7: Fail Workflow If TruffleHog Finds Secrets
+    - name: Fail on TruffleHog Findings
+      if: |
+        steps.trufflehog.outputs.result == 'failure' || $(jq -e '.verified | length > 0' trufflehog-results/trufflehog-results.json) == 0
+      run: |
+        echo "TruffleHog detected critical findings. Failing the workflow."
+        exit 1
       shell: bash
