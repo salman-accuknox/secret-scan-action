@@ -30,18 +30,18 @@ runs:
       run: git fetch --all
       shell: bash
 
-    # Step 3: Determine Workflow Context (PR or Direct Commit)
+    # Step 3: Determine Workflow Context (Push or PR)
     - name: Determine Context
       id: context
       run: |
         if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-          echo "PR detected"
+          echo "Pull Request detected"
           echo "IS_PR=true" >> $GITHUB_ENV
-          echo "PR_BRANCH=${{ github.head_ref }}" >> $GITHUB_ENV
+          echo "SCAN_BRANCH=${{ github.head_ref }}" >> $GITHUB_ENV
         else
-          echo "Direct commit to dev detected"
+          echo "Direct push detected on branch: ${{ github.ref_name }}"
           echo "IS_PR=false" >> $GITHUB_ENV
-          echo "PR_BRANCH=dev" >> $GITHUB_ENV
+          echo "SCAN_BRANCH=${{ github.ref_name }}" >> $GITHUB_ENV
         fi
       shell: bash
 
@@ -55,12 +55,12 @@ runs:
     # Step 5: Run TruffleHog Scan
     - name: Run TruffleHog Scan
       env:
-          PR_BRANCH: ${{ env.PR_BRANCH }}
+        SCAN_BRANCH: ${{ env.SCAN_BRANCH }}
       run: |
         mkdir -p trufflehog-results
-        echo "Running TruffleHog scan on branch: ${{ env.PR_BRANCH }}"
+        echo "Running TruffleHog scan on branch: $SCAN_BRANCH"
         trufflehog --no-update git file://./ \
-          --branch ${{ env.PR_BRANCH }} \
+          --branch $SCAN_BRANCH \
           --results=verified,unverified,unknown \
           --fail \
           --json > trufflehog-results/trufflehog-results.json || true
