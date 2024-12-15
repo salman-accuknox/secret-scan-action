@@ -37,7 +37,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Run Secrets Scanner
-        uses: accuknox/secrets-scanner@v1
+        uses: salman-accuknox/secret-scan-action@main
         with:
           tenant_id: ${{ secrets.TENANT_ID }}
           artifact_api_token: ${{ secrets.ARTIFACT_API_TOKEN }}
