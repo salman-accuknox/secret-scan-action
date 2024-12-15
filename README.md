@@ -27,10 +27,10 @@ name: Secret Scan
 on:
   push:
     branches:
-      - dev
+      - '**'  # Trigger on all branches
   pull_request:
     branches:
-      - dev
+      - '**'  # Trigger on all PRs
 
 jobs:
   secrets-scan:
