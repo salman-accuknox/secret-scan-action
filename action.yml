@@ -24,15 +24,15 @@ runs:
   using: "composite"
   steps:
     # Step 1: Checkout Repository
-    #- name: Checkout Repository
-    #  uses: actions/checkout@v3
-    #  with:
-    #    fetch-depth: 0  # Fetch full history
+    - name: Checkout Repository
+      uses: actions/checkout@v3
+      with:
+        fetch-depth: 0  # Fetch full history
 
-    # Step 2: Fetch All Branches
-    #- name: Fetch All Branches
-    #  run: git fetch --all
-    #  shell: bash
+     Step 2: Fetch All Branches
+    - name: Fetch All Branches
+      run: git fetch --all
+      shell: bash
 
     # Step 3: Determine Workflow Context (Push or PR)
     - name: Determine Context
