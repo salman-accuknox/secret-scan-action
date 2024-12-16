@@ -15,6 +15,10 @@ inputs:
   label_id:
     description: "Label ID for categorizing the TruffleHog results."
     required: true
+  fail_on_findings:
+    description: "Enable or disable failing the workflow on critical findings (true/false)."
+    required: false
+    default: "false"
 
 runs:
   using: "composite"
@@ -58,13 +62,21 @@ runs:
       continue-on-error: true  # Continue workflow even if TruffleHog fails
       env:
         SCAN_BRANCH: ${{ env.SCAN_BRANCH }}
+        FAIL_ON_FINDINGS: ${{ inputs.fail_on_findings }}
       run: |
         mkdir -p trufflehog-results
         echo "Running TruffleHog scan on branch: $SCAN_BRANCH"
+        # Conditionally set the --fail flag
+        FAIL_FLAG=""
+        if [[ "$FAIL_ON_FINDINGS" == "true" ]]; then
+          FAIL_FLAG="--fail"
+        fi
+        
+        echo "Fail on findings is set to: $FAIL_ON_FINDINGS"
         trufflehog --no-update git file://./ \
           --branch $SCAN_BRANCH \
           --results=verified,unverified,unknown \
-          --fail \
+          $FAIL_FLAG \
           --json > trufflehog-results/trufflehog-results.json
       shell: bash
 
