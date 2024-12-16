@@ -12,14 +12,14 @@ The action is fully generic now and allows users to dynamically scan any branch 
 
 ## Inputs
 
-| Name                 | Description                                  | Required | Default  |
-|----------------------|----------------------------------------------|----------|----------|
-| `tenant_id`          | AccuKnox Tenant ID.                          | Yes      | -        |
-| `artifact_api_token` | Authorization token for artifact API.        | Yes      | -        |
-| `artifact_api_url`   | URL of the artifact API to upload results.   | Yes      | -        |
-| `label_id`           | AccuKnox label                               | Yes      | -        |
-| `fail_on_findings`   | Enable or disable failing the workflow on    | No       | false    |
-|                        critical findings (true/false)               |          |          |
+| Name                 | Description                                    | Required | Default  |
+|----------------------|----------------------------------------------  |----------|----------|
+| `tenant_id`          | AccuKnox Tenant ID.                            | Yes      | -        |
+| `artifact_api_token` | Authorization token for artifact API.          | Yes      | -        |
+| `artifact_api_url`   | URL of the artifact API to upload results.     | Yes      | -        |
+| `label_id`           | AccuKnox label                                 | Yes      | -        |
+| `fail_on_findings`   | Fail workflow on critical findings(true/false) | No       | false    |
+                                        
 
 ## Example Workflow
 
