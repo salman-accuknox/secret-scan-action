@@ -1,98 +1,121 @@
-name: "Secrets Scanner"
-description: "Scan Git repositories for secrets using TruffleHog and upload results to artifact API"
-author: "AccuKnox"
+name: AccuKnox Test Secret Scan
+description: Scan secrets in your repository and send the results to Accuknox.
 
 inputs:
+  token:
+    description: 'The token for authenticating with the CSPM panel.'
+    required: true
+
   tenant_id:
-    description: "AccuKnox Tenant ID for artifact API."
+    description: "The ID of the tenant associated with the CSPM panel."
     required: true
-  artifact_api_token:
-    description: "Authorization token for the artifact API."
+
+  label:
+    description: "The label created in AccuKnox SaaS for associating scan results."
     required: true
-  artifact_api_url:
-    description: "API URL to upload the TruffleHog results."
+
+  endpoint:
+    description: "The URL of the CSPM panel to push the scan results to."
     required: true
-  label_id:
-    description: "Label ID for categorizing the TruffleHog results."
-    required: true
-  fail_on_findings:
-    description: "Enable or disable failing the workflow on critical findings (true/false)."
+    default: "cspm.demo.accuknox.com"
+
+  results:
+    description: "Specifies which type(s) of results to output: verified, unknown, unverified, filtered_unverified. Defaults to all types."
+    required: false
+
+  fail:
+    description: "Fail the pipeline if secrets are found"
     required: false
     default: "false"
+
+  branch:
+    description: "The branch to scan. Use 'all-branches' to scan all branches"
+    required: false
+
+  exclude-paths:
+    description: "Paths to exclude from the scan."
+    required: false
+
+  args:
+    description: "Additional arguments to pass to trufflehog."
+    required: false
 
 runs:
   using: "composite"
   steps:
-    # Step 1: Checkout Repository
-    - name: Checkout Repository
-      uses: actions/checkout@v3
-      with:
-        fetch-depth: 0  # Fetch full history
-
-     # Step 2: Fetch All Branches
-    - name: Fetch All Branches
-      run: git fetch --all
-      shell: bash
-
-    # Step 3: Determine Workflow Context (Push or PR)
-    - name: Determine Context
-      id: context
+    - name: Run TruffleHog
       run: |
-        if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-          echo "Pull Request detected"
-          echo "IS_PR=true" >> $GITHUB_ENV
-          echo "SCAN_BRANCH=${{ github.head_ref }}" >> $GITHUB_ENV
-        else
-          echo "Direct push detected on branch: ${{ github.ref_name }}"
-          echo "IS_PR=false" >> $GITHUB_ENV
-          echo "SCAN_BRANCH=${{ github.ref_name }}" >> $GITHUB_ENV
+        RESULTS_FLAG=""
+        if [[ -n "${{ inputs.results }}" ]]; then
+          RESULTS_FLAG="--results ${{ inputs.results }}"
         fi
-      shell: bash
 
-    # Step 4: Install TruffleHog
-    - name: Install TruffleHog
-      run: |
-        curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh | sh -s -- -b /usr/local/bin
-        trufflehog --version
-      shell: bash
-
-    # Step 5: Run TruffleHog Scan
-    - name: Run TruffleHog Scan
-      id: trufflehog
-      continue-on-error: true  # Continue workflow even if TruffleHog fails
-      env:
-        SCAN_BRANCH: ${{ env.SCAN_BRANCH }}
-        FAIL_ON_FINDINGS: ${{ inputs.fail_on_findings }}
-      run: |
-        mkdir -p trufflehog-results
-        echo "Running TruffleHog scan on branch: $SCAN_BRANCH"
-        # Conditionally set the --fail flag
         FAIL_FLAG=""
-        if [[ "$FAIL_ON_FINDINGS" == "true" ]]; then
+        if [[ "${{ inputs.fail }}" == "true" ]]; then
           FAIL_FLAG="--fail"
         fi
+
+        EXCLUDE_FLAG=""
+        if [[ -n "${{ inputs.exclude-paths }}" ]]; then
+          EXCLUDE_FLAG="-x /pwd/${{ inputs.exclude-paths }}"
+        fi
+
+        EXTRA_ARGS=""
+        if [[ -n "${{ inputs.args }}" ]]; then
+          EXTRA_ARGS="${{ inputs.args }}"
+        fi
+
+        BRANCH_FLAG=""
+        if [[ "${{ inputs.branch }}" == "all-branches" ]]; then
+          BRANCH_FLAG=""
+        elif [[ -n "${{ inputs.branch }}" ]]; then
+          BRANCH_FLAG="--branch=${{ inputs.branch }}"
+        else
+          if [[ -n "${{ github.event.pull_request.head.ref }}" ]]; then
+            BRANCH_FLAG="--branch=${{ github.event.pull_request.head.ref }}"
+          else
+            BRANCH_FLAG="--branch=${{ github.ref_name }}"
+          fi
+        fi
+
+        docker run --rm -v "$PWD:/pwd" trufflesecurity/trufflehog:3.88.1 git file:///pwd \
+        --json --no-update $BRANCH_FLAG $RESULTS_FLAG $FAIL_FLAG $EXCLUDE_FLAG $EXTRA_ARGS > trufflehog-results.json || exit_code=$?
         
-        echo "Fail on findings is set to: $FAIL_ON_FINDINGS"
-        trufflehog --no-update git file://./ \
-          --branch $SCAN_BRANCH \
-          --results=verified,unverified,unknown \
-          $FAIL_FLAG \
-          --json > trufflehog-results/trufflehog-results.json
+        echo "TRUFFLEHOG_EXIT_CODE=${exit_code:-0}" >> $GITHUB_ENV
       shell: bash
 
-    # Step 6: Upload Results to Artifact Storage
-    - name: Upload to Artifact Storage
+    - name: Push report to CSPM panel
       run: |
-        curl --location --request POST "${{ inputs.artifact_api_url }}?tenant_id=${{ inputs.tenant_id }}&data_type=TruffleHog&save_to_s3=false&label_id=${{ inputs.label_id }}" \
-          --header "Tenant-Id: ${{ inputs.tenant_id }}" \
-          --header "Authorization: Bearer ${{ inputs.artifact_api_token }}" \
-          --form "file=@trufflehog-results/trufflehog-results.json"
+        if [[ ! -s trufflehog-results.json ]]; then
+          echo "No secrets found. Skipping API upload."
+          exit 0
+        fi
+        
+        RESPONSE=$(curl --location 'https://${{ inputs.endpoint }}/api/v1/artifact/?tenant_id=${{ inputs.tenant_id }}&data_type=TruffleHog&save_to_s3=true&label_id=${{ inputs.label }}' \
+            --header 'Tenant-Id: ${{ inputs.tenant_id }}' \
+            --header 'Authorization: Bearer ${{ inputs.token }}' \
+            --form 'file=@./trufflehog-results.json')
+
+        echo "Response: $RESPONSE"
+        if [[ "$RESPONSE" != *"File received successfully"* ]]; then
+          echo "Error: Failed to push report to CSPM panel"
+          exit 1
+        fi
       shell: bash
 
-    # Step 7: Fail Workflow If TruffleHog Finds Secrets
-    - name: Fail on TruffleHog Findings
-      if: steps.trufflehog.outcome == 'failure'
+    - name: Save TruffleHog Scan Report as an Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: accuknox-secret-scan-results
+        path: trufflehog-results.json
+
+    - name: Quality Check with exit_code
+      if: env.TRUFFLEHOG_EXIT_CODE == '183'
       run: |
-        echo "TruffleHog detected critical findings. Failing the workflow."
+        echo "TruffleHog found credentials. Failing the job."
         exit 1
       shell: bash
+
+branding:
+  icon: "lock"
+  color: "purple"
